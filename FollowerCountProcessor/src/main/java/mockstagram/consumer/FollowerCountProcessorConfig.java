@@ -2,12 +2,9 @@ package mockstagram.consumer;
 
 public class FollowerCountProcessorConfig {
 
-    // Kafka
     private final String kafkaBroker;
     private final String kafkaTopic;
     private final String kafkaGroupId;
-
-    // Cassandra
     private final String cassandraHost;
     private final int cassandraPort;
     private final String cassandraKeyspace;

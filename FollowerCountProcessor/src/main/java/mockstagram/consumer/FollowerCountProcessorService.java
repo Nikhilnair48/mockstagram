@@ -20,6 +20,14 @@ import java.util.Collections;
 public class FollowerCountProcessorService {
     private static final Logger log = LoggerFactory.getLogger(FollowerCountProcessorService.class);
 
+    /*
+        1. Create Kafka Consumer
+        2. Connect to Cassandra
+            Prepare statements
+        3. Consume and process in a loop; Shutdown hook to close consumer gracefully
+            3a) Insert timeline record
+            3b) Upsert aggregator row
+    */
     public static void main(String[] args) {
         FollowerCountProcessorConfig config = new FollowerCountProcessorConfig();
         log.info("=== Starting FollowerCountProcessorService ===");
@@ -29,14 +37,14 @@ public class FollowerCountProcessorService {
         log.info("Cassandra Host: {}, Port: {}, Keyspace: {}",
                 config.getCassandraHost(), config.getCassandraPort(), config.getCassandraKeyspace());
 
-        // 1. Create Kafka Consumer
+        
         Consumer<String, String> consumer = createKafkaConsumer(
                 config.getKafkaBroker(),
                 config.getKafkaGroupId()
         );
         consumer.subscribe(Collections.singletonList(config.getKafkaTopic()));
 
-        // 2. Connect to Cassandra
+        
         try (CqlSession session = CqlSession.builder()
                 .addContactPoint(new InetSocketAddress(config.getCassandraHost(), config.getCassandraPort()))
                 .withLocalDatacenter("datacenter1")
@@ -45,7 +53,7 @@ public class FollowerCountProcessorService {
 
             log.info("Connected to Cassandra successfully.");
 
-            // Prepare statements
+            
             PreparedStatement insertTimeline = session.prepare(
                     "INSERT INTO follower_timeline (influencer_id, event_ts, follower_count) "
                             + "VALUES (?, ?, ?)"
@@ -67,10 +75,10 @@ public class FollowerCountProcessorService {
                             + "WHERE influencer_id = ?"
             );
 
-            // 3. Consume and process in a loop
+            
             ObjectMapper mapper = new ObjectMapper();
 
-            // Use a shutdown hook to close consumer gracefully
+            
             Runtime.getRuntime().addShutdownHook(new Thread(() -> {
                 log.info("Shutting down consumer...");
                 consumer.wakeup();
@@ -92,15 +100,15 @@ public class FollowerCountProcessorService {
                             continue;
                         }
 
-                        // 3a) Insert timeline record
+                        
                         Instant eventTime = Instant.ofEpochMilli(data.getTimestamp());
                         session.executeAsync(insertTimeline.bind(
                                 data.getPk(),
-                                eventTime,            // use Instant instead of java.util.Date
+                                eventTime,
                                 data.getFollowerCount()
                         ));
 
-                        // 3b) Upsert aggregator row
+                        
                         Row existing = session.execute(selectAggregate.bind(data.getPk())).one();
                         if (existing == null) {
                             long sum = data.getFollowerCount();
@@ -140,7 +148,6 @@ public class FollowerCountProcessorService {
     }
 
     private static Consumer<String, String> createKafkaConsumer(String kafkaBroker, String groupId) {
-        // Basic consumer config
         var props = new java.util.Properties();
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, kafkaBroker);
         props.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());

@@ -12,7 +12,6 @@ public class FollowerData {
     public int followerCount;
     public long timestamp;
 
-    // Default constructor needed for Jackson
     public FollowerData() { }
 
     public long getPk() {
